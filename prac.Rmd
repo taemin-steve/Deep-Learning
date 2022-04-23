@@ -1,0 +1,161 @@
+---
+title: "DataMining"
+author: "TaeMinJeong"
+date: '2022 4 22 '
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 2. 선형회귀분석
+### 1) 데이터 수집 및 전처리
+선형회귀 분석에 사용한 Data Set은 Kaggle에 존재하는 Data Set으로 차의 가격을 예측하는데 사용하는 모델이다. R studio에 CarPrice라는 이름으로 CSV 파일을 불러왔다.
+
+```{r carPrice}
+carData <- read.csv("C:/Users/okchr/CarPrice.csv")
+str(carData)
+```
+변수는 총 26개, 205개의 sample을 가지고 있다.
+
+### 2) 탐색적 데이터 분석
+범주형 범수와 정규화 스케일링을 하기전에 우선적으로 데이터 분석을 진행하도록 하겠다.이때 car_ID는 단순히 index이며 CarName은 그에 따른 변화이므로 해당 데이터에서 제거 하기로 하였다.
+
+```{r delete, results = "hide"}
+carData <- carData[,-c(1,3)] #car_ID, CarName 제거
+str(carData)
+```
+
+```{r plot1}
+#install.packages("ggplot2")
+
+colSums(is.na(carData)) # null 값이 있는지 확인
+library(ggplot2)
+names(carData)[1]
+
+#par(mfrow=c(2,1))
+plot(carData$symboling,carData$price , main = "plot1", cex.main=2.5)
+plot(carData$fueltype ,carData$price , main = "plot2", cex.main=2.5)
+qplot(symboling , price , data = carData, main="symboling")
+qplot(fueltype, price , data = carData, main="fueltype")
+qplot(aspiration, price , data = carData, main="aspiration")
+qplot(doornumber , price , data = carData, main="doornumber")
+qplot(carbody, price , data = carData, main="carbody")
+qplot(drivewheel, price , data = carData, main="drivewheel")
+qplot(enginelocation, price , data = carData, main="enginelocation")
+qplot(wheelbase, price , data = carData, main="wheelbase")
+qplot(carlength, price , data = carData, main="carlength")
+qplot(carwidth, price , data = carData, main="carwidth")
+qplot(carheight, price , data = carData, main="carheight")
+qplot(curbweight, price , data = carData, main="curbweight")
+qplot(enginetype, price , data = carData, main="enginetype")
+qplot(cylindernumber, price , data = carData, main="cylindernumber")
+qplot(enginesize, price , data = carData, main="enginesize")
+qplot(fuelsystem, price , data = carData, main="fuelsystem")
+qplot(boreratio, price , data = carData, main="boreratio")
+qplot(stroke, price , data = carData, main="stroke")
+qplot(compressionratio, price , data = carData, main="compressionratio")
+qplot(horsepower, price , data = carData, main="horsepower")
+qplot(peakrpm, price , data = carData, main="peakrpm")
+qplot(citympg, price , data = carData, main="citympg")
+qplot(highwaympg, price , data = carData, main="highwaympg")
+
+```
+
+분석결과 wheelbase, carlength, carwidth, curbweight, enginesize, horsepower 등은 price와 정비례 관계, citympg, highwaympg 등은 반비례 관계인 것을 확인 할 수 있다. 
+
+```{r corr }
+
+carData.numerical <- carData[,-c(2,3,4,5,6,7,13,14,16)]
+#install.packages("corrplot")
+#install.packages("magrittr")
+library(corrplot) # correlation test and visualization
+library(magrittr) 
+carData.numerical%>%cor.mtest(method='pearson')->p.value
+str(p.value)
+carData.numerical %>% na.omit%>%cor %>% corrplot.mixed(p.mat=p.value[[1]], sig.level=.05, lower = 'number', upper='pie', tl.cex=.6, tl.col='black', order='hclust')
+```
+
+ 또한 fueltype, aspiration, doornumber 등의 다양한 Categorical 변수가 존재하므로, 이를 Numerical 변수로 전환해 주어야 한다. 이때 모든 Categorical 변수를 확인해본 결과 모두 Nominal Data 이므로, One-Hot-Encoding을 적용하기로 하였다. 
+
+```{r library, results = "hide" }
+library(caret) #caret 라이브러리를 활용하여 One-Hot_Encoding 진행
+```
+
+```{r encoding}
+dummy <- dummyVars(" ~ .", data = carData)
+carData.new <- data.frame(predict(dummy, newdata= carData))
+str(carData.new)
+```
+
+car_ID, CarName은 삭제되고, Categorical 변수들이 Numerical 데이터로 변환된 것을 확인 할 수있다. 이제 모든 데이터를 표준화 하여 줄 것인데, 이는 선형회귀에서 상당히 유용한 방법이다. 표준화는 caret 라이브러리의 preProcess 기능을 사용하였다.(단 price 값은 표준화를 해서는 안됨으로 빼고 진행하도록 한다.)
+
+```{r standardization }
+price <-carData.new$price
+pstd <- caret::preProcess(carData.new, method = c("center","scale"))
+carData.std <- predict(pstd, carData.new)
+carData.std$price <- price
+summary(carData.std)
+```
+
+### 3) 학습모델 구축 및 해석
+
+학습하기에 앞서 train dataset과 test dataset을 나누어 주어야 한다.
+createDatapartition을 사용하여 price의 값 비율이 train data 와 test data에 유사하게 적용되도록 하였다. (train data와 test data의 비율은 7:3이다.)
+
+```{r divide }
+idx <- createDataPartition(carData.std$price, p =c(0.7,0.3), list = FALSE)
+
+train_df <- carData.std[idx,]
+test_df <- carData.std[-idx,]
+```
+
+모든 변수를 이용하여 다중선형회귀 모형을 구축하였다. 학습은 train_df를 이용하여 진행하였다. 
+
+```{r mul_model }
+multi_model <- lm(price ~ ., data = train_df)
+```
+
+잔차: Residual standard error 는 2243
+변수별 계수: 각각 해당변수의 Estimate 값을 확인하면 된다. 예를 들어 stroke 의 계수는 -1072.672이다
+P-value: P-value의 값은 2.2e-16으로 매우 작은 것을 확인할 수 있다.
+Adjusted R-squared:0.9267 로 Adjusted R-squared 또한 매우 높은것을 확인 할 수 있다.
+F 검정: F-statistic: 46.49 on 40 and 104 DF이다.
+
+### 4) 선형회귀 결과해석
+MSE는 Mean Sqaure Error로 실제 Y값에서 예측값을 뺀것의 제곱을 모두 더한 것이다.
+해당 값의 측정은 test_df를 이용해서 진행한다.
+```{r MSE }
+y_pred <-predict(multi_model , test_df)
+mean((test_df$price - y_pred)^2)
+```
+해당 모델의 MSE 값은 6123227 이다. 
+
+
+MAE는 Mean Absolute Error로 실제 Y 값에서 예측값을 뺀준 것에 절댓값을 취해준 것을 모두 더한 것이다. 
+```{r MAE }
+#install.packages("Metrics")
+library(Metrics)
+y_pred <-predict(multi_model , test_df)
+mae(test_df$price, y_pred)
+```
+해당 모델의 MAE 값은 2076.404이다.
+
+```{r plot }
+par(mfrow = c(2,2))
+plot(multi_model)
+```
+
+
+### 5) 변수선택법을 사용하여 정확도를 향상
+
+수업시간에 배운 내용 중 Stepwise selection을 적용해서 정확도 향상을 시도해보자. 
+```{r stepwise, results = "hide" }
+new_model <- step(multi_model, direction = "both")
+```
+
+```{r stepwise1}
+summary(new_model)
+```
+new_model 의 경우 Adjusted R-squared가 0.9267 에서 0.933 으로 소폭 상승한 것을 확인할 수 있다. 
