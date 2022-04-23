@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <script src="./node_modules/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="./node_modules/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+  <script src="./node_modules/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+  <script src="./node_modules/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+</head>
+
+<body>
+  <script type="importmap">
+    {
+        "imports": {
+            "three": "./node_modules/three/build/three.module.js"
+        }
+    }
+</script>
+  <div class="container">
+    <!-- <video class="input_video"></video> -->
+    <video loop hidden controls autoplay muted="muted"class="input_video" src="video1.mov"></video>
+    <canvas class="output_canvas" width="640px" height="480px"></canvas>
+  </div>
+ <script type="module" src="sample.js"></script>
+</body>
+</html>
